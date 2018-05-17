@@ -15,14 +15,21 @@ long_range_angle = 10 # angle to look for obstacles beyond short_range_cutoff
 short_range_angle_range = (360-(short_range_angle/2),short_range_angle/2)
 long_range_angle_range = (360-(long_range_angle/2),long_range_angle/2)
 
+last_angle = None
+
 def radar_callback(data):
     global radar_buffer
     global range_m
+    global last_angle
+    do_calc = False
     for s in data.sector.scanlines:
         if s.angle > short_range_angle_range[0] or s.angle < short_range_angle_range[1]:
             radar_buffer[s.angle] = s
             range_m = s.range
-    if len(radar_buffer):
+        if last_angle is None or (last_angle < 180 and s.angle >= 180):
+            do_calc = True
+        last_angle = s.angle
+    if len(radar_buffer) and do_calc:
         avg_intensities = []
         for i in range(len(radar_buffer[radar_buffer.keys()[0]].intensities)):
             avg_intensities.append(0)
@@ -31,13 +38,15 @@ def radar_callback(data):
         for s in radar_buffer.itervalues():
             for i in range(4,len(s.intensities)):
                 if i*bin_size > short_range_cutoff and (s.angle > long_range_angle_range[0] or s.angle < long_range_angle_range[1]):
-                    avg_intensities[i] += (ord(s.intensities[i])/255.0)/float(len(radar_buffer))*short_range_angle/long_range_angle                                        
+                    #avg_intensities[i] += (ord(s.intensities[i])/255.0)/float(len(radar_buffer))*short_range_angle/long_range_angle
+                    avg_intensities[i] = max(avg_intensities[i], ord(s.intensities[i])/255.0)
                 else:
-                    avg_intensities[i] += (ord(s.intensities[i])/255.0)/float(len(radar_buffer))
+                    #avg_intensities[i] += (ord(s.intensities[i])/255.0)/float(len(radar_buffer))
+                    avg_intensities[i] = max(avg_intensities[i], ord(s.intensities[i])/255.0)
         #print range_m, range_m/float(len(avg_intensities)) ,  avg_intensities[0:50]
         nearest = None
         for i in range(len(avg_intensities)):
-            if avg_intensities[i] > .15:
+            if avg_intensities[i] > .05:
                 nearest = i*bin_size
                 break
         #print 'nearest:',nearest
